@@ -53,7 +53,7 @@ func NewMariaDBDatabase() DBInterface {
 	return MariaDBDatabase{&Database{db, MariaDBDatabaseInfo{&DatabaseInfo{}}}}
 }
 
-func (db *MariaDBDatabase) DBWriteResource(ctx context.Context, k8sObj *unstructured.Unstructured, data []byte) error {
+func (db MariaDBDatabase) WriteResource(ctx context.Context, k8sObj *unstructured.Unstructured, data []byte) error {
 	tx, err := db.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("could not begin transaction for resource %s: %s", k8sObj.GetUID(), err)
