@@ -1,8 +1,8 @@
 module github.com/kubearchive/kubearchive
 
-go 1.23.9
+go 1.24.0
 
-toolchain go1.23.9
+toolchain go1.24.4
 
 require (
 	github.com/Cyprinus12138/otelgin v1.0.2
@@ -55,7 +55,7 @@ require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr v1.4.10 // indirect
-	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
