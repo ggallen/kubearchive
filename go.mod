@@ -1,8 +1,8 @@
 module github.com/kubearchive/kubearchive
 
-go 1.23.9
+go 1.24.0
 
-toolchain go1.23.9
+toolchain go1.24.4
 
 require (
 	github.com/Cyprinus12138/otelgin v1.0.2
@@ -59,15 +59,14 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
-	github.com/bytedance/sonic v1.12.3 // indirect
-	github.com/bytedance/sonic/loader v0.2.0 // indirect
+	github.com/bytedance/sonic v1.13.3 // indirect
+	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/cert-manager/cert-manager v1.16.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudevents/sdk-go/sql/v2 v2.0.0-20240712172937-3ce6b2f1f011 // indirect
-	github.com/cloudwego/base64x v0.1.4 // indirect
-	github.com/cloudwego/iasm v0.2.0 // indirect
+	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/ebitengine/purego v0.8.3 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
