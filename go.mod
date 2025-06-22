@@ -1,8 +1,8 @@
 module github.com/kubearchive/kubearchive
 
-go 1.23.9
+go 1.24.0
 
-toolchain go1.23.9
+toolchain go1.24.4
 
 require (
 	github.com/Cyprinus12138/otelgin v1.0.2
@@ -164,7 +164,7 @@ require (
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.26.0 // indirect
-	golang.org/x/time v0.10.0 // indirect
+	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/api v0.198.0 // indirect
