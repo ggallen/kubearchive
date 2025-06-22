@@ -1,8 +1,8 @@
 module github.com/kubearchive/kubearchive
 
-go 1.23.9
+go 1.24.0
 
-toolchain go1.23.9
+toolchain go1.24.4
 
 require (
 	github.com/Cyprinus12138/otelgin v1.0.2
@@ -49,7 +49,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.23.1 // indirect
+	cel.dev/expr v0.24.0 // indirect
 	contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d // indirect
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
