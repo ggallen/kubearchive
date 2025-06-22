@@ -1,8 +1,8 @@
 module github.com/kubearchive/kubearchive
 
-go 1.23.9
+go 1.24.0
 
-toolchain go1.23.9
+toolchain go1.24.4
 
 require (
 	github.com/Cyprinus12138/otelgin v1.0.2
@@ -44,7 +44,7 @@ require (
 	k8s.io/client-go v0.33.1
 	k8s.io/klog/v2 v2.130.1
 	knative.dev/eventing v0.45.1
-	knative.dev/pkg v0.0.0-20250610210745-4e27b2e68090
+	knative.dev/pkg v0.0.0-20250617121757-fd105c6320da
 	sigs.k8s.io/controller-runtime v0.21.0
 )
 
