@@ -12,10 +12,10 @@ metadata:
       == "main"
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: test-component
-    appstudio.openshift.io/component: test-component
+    appstudio.openshift.io/application: kubearchive
+    appstudio.openshift.io/component: kubearchive-sink
     pipelines.appstudio.openshift.io/type: build
-  generateName: test-component-on-pull-request-
+  generateName: kubearchive-sink-on-pull-request-
   namespace: user-ns2
 spec:
   params:
