@@ -21,7 +21,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
 	github.com/spf13/cobra v1.9.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.11.0
 	go.opentelemetry.io/contrib/instrumentation/host v0.61.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0
