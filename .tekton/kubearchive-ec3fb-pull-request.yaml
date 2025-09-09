@@ -183,7 +183,15 @@ spec:
       runAfter:
       - generate-code
       taskRef:
-        name: ko-oci-ta
+        params:
+        - name: url 
+          value: https://github.com/ggallen/build-definitions.git
+        - name: revision
+          value: ko-builder
+        - name: pathInRepo
+          value: task/ko-oci-ta/0.1/ko-oci-ta.yaml
+        resolver: git
+
       when:
       - input: $(tasks.init.results.build)
         operator: in
