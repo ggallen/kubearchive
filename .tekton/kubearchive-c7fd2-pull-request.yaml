@@ -25,13 +25,15 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/kubearchive/user-ns2/kubearchive-c7fd2:on-pr-{{revision}}
+    value: quay.io/gallen/operator:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: dockerfile
     value: Dockerfile
-  - name: path-context
-    value: cmd/operator
+  - name: MAIN
+    value: ./cmd/operator
+  - name: build-source-image
+    value: true
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images while maintaining trust after pipeline customization.
@@ -82,6 +84,14 @@ spec:
     - default: "false"
       description: Add built image into an OCI image index
       name: build-image-index
+      type: string
+    - default: ""
+      description: Default base image for ko
+      name: ko-build-args
+      type: string
+    - default: ""
+      description: Default base image for ko
+      name: ko-default-base-image
       type: string
     results:
     - description: ""
@@ -172,7 +182,7 @@ spec:
     - name: build-container
       params:
       - name: BUILD_ARGS
-        value: $(params.BUILD_ARGS)
+        value: $(params.ko-build-args)
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: COMMIT_SHA
@@ -184,7 +194,7 @@ spec:
       - name: IMAGE_EXPIRES_AFTER
         value: $(params.image-expires-after)
       - name: KO_DEFAULTBASEIMAGE
-        value: $(params.KO_DEFAULTBASEIMAGE)
+        value: $(params.ko-default-base-image)
       - name: KO_IMAGE
         value: quay.io/gallen/ko-builder:latest
       - name: MAIN
