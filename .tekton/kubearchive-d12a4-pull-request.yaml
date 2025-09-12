@@ -96,7 +96,7 @@ spec:
         controller-gen crd paths="./cmd/operator/..." output:dir=config/crds
         controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
       description: Preprocessing script for source code
-      name: preprocessing-input
+      name: preprocessing-script
       type: string
     results:
     - description: ""
