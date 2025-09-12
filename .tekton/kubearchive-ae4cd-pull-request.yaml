@@ -88,7 +88,7 @@ spec:
       description: Import path to build
       name: import-path
       type: string
-    - default: "-B"
+    - default: "-B -t latest"
       description: Build args for ko
       name: build-args
       type: string
