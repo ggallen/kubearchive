@@ -72,7 +72,7 @@ spec:
         1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
       type: string
-    - default: "false"
+    - default: "true"
       description: Build a source image.
       name: build-source-image
       type: string
@@ -84,17 +84,19 @@ spec:
       description: Default base image for ko
       name: default-base-image
       type: string
-    - default: ""
+    - default: "./cmd/operator"
       description: Import path to build
       name: import-path
       type: string
-    - default: ""
+    - default: "-B"
       description: Build args for ko
       name: build-args
       type: string
-    - default: ""
+    - default: |
+        controller-gen crd paths="./cmd/operator/..." output:dir=config/crds
+        controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
       description: Preprocessing script for source code
-      name: PREPROCESSING_SCRIPT
+      name: preprocessing-input
       type: string
     results:
     - description: ""
