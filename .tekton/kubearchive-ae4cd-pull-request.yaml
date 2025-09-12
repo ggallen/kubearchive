@@ -511,7 +511,7 @@ spec:
         resolver: bundles
       when:
       - input: $(params.preprocessing-script)
-        operator: in
+        operator: notin
         values:
         - ""
     workspaces:
