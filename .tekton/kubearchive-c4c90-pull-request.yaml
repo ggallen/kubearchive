@@ -25,11 +25,9 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/kubearchive/user-ns2/kubearchive-c4c90:on-pr-{{revision}}
+    value: quay.io/gallen/operator:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
-  - name: dockerfile
-    value: Dockerfile
   - name: path-context
     value: cmd/operator
   pipelineSpec:
@@ -82,6 +80,18 @@ spec:
     - default: "false"
       description: Add built image into an OCI image index
       name: build-image-index
+      type: string
+    - default: ""
+      description: Default base image for ko
+      name: ko-default-base-image
+      type: string
+    - default: "./cmd/operator"
+      description: Main import for ko
+      name: ko-main
+      type: string
+    - default: "-B"
+      description: ko build args
+      name: ko-build-args
       type: string
     results:
     - description: ""
@@ -172,7 +182,7 @@ spec:
     - name: build-container
       params:
       - name: BUILD_ARGS
-        value: $(params.BUILD_ARGS)
+        value: $(params.build-args)
       - name: CACHI2_ARTIFACT
         value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
       - name: COMMIT_SHA
@@ -184,11 +194,11 @@ spec:
       - name: IMAGE_EXPIRES_AFTER
         value: $(params.image-expires-after)
       - name: KO_DEFAULTBASEIMAGE
-        value: $(params.KO_DEFAULTBASEIMAGE)
+        value: $(params.ko-default-base-image)
       - name: KO_IMAGE
         value: quay.io/gallen/ko-builder:latest
       - name: MAIN
-        value: $(params.MAIN)
+        value: $(params.ko-main)
       - name: SOURCE_ARTIFACT
         value: $(tasks.generate-code.results.SCRIPT_ARTIFACT)
       runAfter:
