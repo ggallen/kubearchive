@@ -409,7 +409,7 @@ spec:
       - name: PREFETCH_INPUT
         value: $(params.prefetch-input)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.generate code.results.SCRIPT_ARTIFACT)
+        value: $(tasks.generate-code.results.SCRIPT_ARTIFACT)
       runAfter:
       - coverity-availability-check
       taskRef:
