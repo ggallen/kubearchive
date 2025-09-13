@@ -91,7 +91,7 @@ spec:
     - default: "-B"
       description: Build args for ko
       name: build-args
-      type: array
+      type: string
     - default: |
         controller-gen crd paths="./cmd/operator/..." output:dir=config/crds
         controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
