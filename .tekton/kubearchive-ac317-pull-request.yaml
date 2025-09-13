@@ -92,7 +92,7 @@ spec:
       description: Build args for ko
       name: build-args
       type: string
-    - default:
+    - default: |
         controller-gen crd paths="./cmd/operator/..." output:dir=config/crds
         controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
       description: Preprocessing script for source code
