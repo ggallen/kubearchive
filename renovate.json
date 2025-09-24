@@ -11,7 +11,9 @@
     {
       "customType": "regex",
       "description": "Update _VERSION variables in bash files",
-      "fileMatch": [".sh"],
+      "managerFilePatterns": [
+        "/.sh/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?\\s(?:export) .+?_VERSION=(?<currentValue>.+?)\\s"
       ]
@@ -19,7 +21,9 @@
     {
       "customType": "regex",
       "description": "Update versions listed in the documentation",
-      "fileMatch": [".adoc"],
+      "managerFilePatterns": [
+        "/.adoc/"
+      ],
       "matchStrings": [
         "\\/\\/ renovate: datasource=(?<datasource>[a-z-]+?)(?: depName=(?<depName>.+?))? packageName=(?<packageName>.+?)(?: versioning=(?<versioning>[a-z-]+?))?\\s.+? \\(\\+(?<currentValue>.+?)\\)"
       ]
@@ -27,25 +31,44 @@
   ],
   "packageRules": [
     {
-      "matchManagers": ["regex"],
+      "matchManagers": [
+        "custom.regex"
+      ],
       "automerge": false
     },
     {
-      "matchManagers": ["regex"],
-      "matchDepNames": ["knative-eventing"],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDepNames": [
+        "knative-eventing"
+      ],
       "groupName": "knative eventing"
     },
     {
-      "matchManagers": ["regex"],
-      "matchDepNames": ["cert-manager"],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDepNames": [
+        "cert-manager"
+      ],
       "groupName": "cert manager"
     },
     {
-      "matchPackageNames": ["go"],
+      "matchPackageNames": [
+        "go"
+      ],
       "automerge": false
     },
     {
-      "matchPackageNames": ["k8s.io/api", "k8s.io/apimachinery", "k8s.io/apiserver", "k8s.io/cli-runtime", "k8s.io/client-go", "k8s.io/apiextensions-apiserver"],
+      "matchPackageNames": [
+        "k8s.io/api",
+        "k8s.io/apimachinery",
+        "k8s.io/apiserver",
+        "k8s.io/cli-runtime",
+        "k8s.io/client-go",
+        "k8s.io/apiextensions-apiserver"
+      ],
       "allowedVersions": "<0.33.0"
     }
   ]
