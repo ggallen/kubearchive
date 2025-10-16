@@ -33,6 +33,8 @@ spec:
     value: |
       controller-gen crd paths="./cmd/operator/..." output:dir=config/crds
       controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
+  - name: import-path
+    value: ./cmd/sink
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images while maintaining trust after pipeline customization.
