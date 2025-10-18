@@ -23,12 +23,22 @@ spec:
     value: '{{source_url}}'
   - name: revision
     value: '{{revision}}'
-  - name: output-image
-    value: quay.io/kubearchive/user-ns2/kubearchive-bfb49:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: dockerfile
     value: Dockerfile
+    - name: output-image
+    value: quay.io/gallen/sink:on-pr-{{revision}}
+  - name: preprocessing-script
+    value: |
+      controller-gen crd paths="./cmd/operator/..." output:dir=config/crds
+      controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
+  - name: ko-docker-repo
+    value: quay.io/gallen
+  - name: import-path
+    value: ./cmd/sink
+  - name: pr-tag
+    value: on-pr-{{revision}}
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images while maintaining trust after pipeline customization.
