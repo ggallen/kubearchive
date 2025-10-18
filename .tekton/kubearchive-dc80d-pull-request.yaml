@@ -24,7 +24,17 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/kubearchive/user-ns2/kubearchive-dc80d:on-pr-{{revision}}
+    value: quay.io/gallen/sink:on-pr-{{revision}}
+  - name: preprocessing-script
+    value: |
+      controller-gen crd paths="./cmd/operator/..." output:dir=config/crds
+      controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
+  - name: ko-docker-repo
+    value: quay.io/gallen
+  - name: import-path
+    value: ./cmd/sink
+  - name: pr-tag
+    value: on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: dockerfile
