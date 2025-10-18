@@ -27,7 +27,7 @@ spec:
     value: 5d
   - name: dockerfile
     value: Dockerfile
-    - name: output-image
+  - name: output-image
     value: quay.io/gallen/sink:on-pr-{{revision}}
   - name: preprocessing-script
     value: |
