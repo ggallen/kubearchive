@@ -462,24 +462,30 @@ func (r *SinkFilterReconciler) handleWatchEvent(ctx context.Context, event watch
 	_, namespaceExists := watchInfo.Namespaces[objNamespace]
 
 	if globalExists || namespaceExists {
-		r.sendCloudEvent(ctx, event, watchInfo)
+		return r.sendCloudEvent(ctx, event, watchInfo)
 	}
 	return nil
 }
 
-func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, event watch.Event, watchInfo *WatchInfo) {
+func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, event watch.Event, watchInfo *WatchInfo) error {
 	log := log.FromContext(ctx)
 
 	if r.cloudEventPublisher == nil {
-		log.Error(nil, "CloudEvent publisher not available, skipping event", "eventType", event.Type, "gvr", watchInfo.GVR.String())
-		return
+		err := fmt.Errorf("CloudEvent publisher not available")
+		log.Error(err, "Skipping event", "eventType", event.Type, "gvr", watchInfo.GVR.String())
+		return err
 	}
 
 	unstructuredObj, ok := event.Object.(*unstructured.Unstructured)
 	if !ok {
-		log.Error(nil, "Unexpected object type in watch event", "objectType", fmt.Sprintf("%T", event.Object))
-		return
+		err := fmt.Errorf("unexpected object type in watch event: %T", event.Object)
+		log.Error(err, "Failed to process watch event")
+		return err
 	}
+
+	uid := string(unstructuredObj.GetUID())
+	namespace := unstructuredObj.GetNamespace()
+	name := unstructuredObj.GetName()
 
 	var eventType string
 	switch event.Type {
@@ -490,8 +496,9 @@ func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, event watch.E
 	case watch.Deleted:
 		eventType = "delete"
 	default:
-		log.Error(nil, "Ignoring unknown watch event type", "type", event.Type)
-		return
+		err := fmt.Errorf("unknown watch event type: %s", event.Type)
+		log.Error(err, "Ignoring event", "uid", uid, "namespace", namespace, "name", name)
+		return err
 	}
 
 	resource := unstructuredObj.Object
@@ -507,14 +514,33 @@ func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, event watch.E
 		resource["kind"] = watchInfo.KindSelector.Kind
 	}
 
-	result := r.cloudEventPublisher.Send(ctx, "org.kubearchive.sinkfilters.resource."+eventType, resource)
+	fullEventType := "org.kubearchive.sinkfilters.resource." + eventType
+	result := r.cloudEventPublisher.Send(ctx, fullEventType, resource)
 	if !ce.IsACK(result) {
+		var err error
 		if ce.IsNACK(result) {
-			log.Error(nil, "Cloud event was not acknowledged", "eventType", eventType, "gvr", watchInfo.GVR.String(), "kind", watchInfo.KindSelector.Kind, "result", result)
+			err = fmt.Errorf("cloud event was not acknowledged: %v", result)
 		} else {
-			log.Error(nil, "Cloud event send failed", "eventType", eventType, "gvr", watchInfo.GVR.String(), "kind", watchInfo.KindSelector.Kind, "result", result)
+			err = fmt.Errorf("cloud event send failed: %v", result)
 		}
+		log.Error(err, "Failed to send cloud event",
+			"uid", uid,
+			"namespace", namespace,
+			"name", name,
+			"eventType", eventType,
+			"gvr", watchInfo.GVR.String(),
+			"kind", watchInfo.KindSelector.Kind)
+		return err
 	}
+
+	log.Info("Cloud event sent successfully",
+		"uid", uid,
+		"namespace", namespace,
+		"name", name,
+		"eventType", fullEventType,
+		"gvr", watchInfo.GVR.String(),
+		"kind", watchInfo.KindSelector.Kind)
+	return nil
 }
 
 func (r *SinkFilterReconciler) SetupWithManager(mgr ctrl.Manager) error {
