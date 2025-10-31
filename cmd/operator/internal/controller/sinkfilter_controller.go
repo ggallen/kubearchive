@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -42,6 +43,13 @@ type WatchInfo struct {
 	StopCh          chan struct{}
 	WatchInterface  watch.Interface
 	ResourceVersion string // Current resource version for efficient reconnections
+	Queue           workqueue.RateLimitingInterface
+	WorkerWg        sync.WaitGroup
+}
+
+type watchEventItem struct {
+	event watch.Event
+	ctx   context.Context
 }
 
 type SinkFilterReconciler struct {
@@ -84,7 +92,6 @@ func (r *SinkFilterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile RBAC resources
 	if err := r.reconcileClusterRole(ctx, sinkFilter); err != nil {
 		log.Error(err, "Failed to reconcile ClusterRole")
 		return ctrl.Result{}, err
@@ -151,6 +158,8 @@ func (r *SinkFilterReconciler) generateWatches(ctx context.Context, namespacesBy
 			if watchInfo.WatchInterface != nil {
 				watchInfo.WatchInterface.Stop()
 			}
+			watchInfo.Queue.ShutDown()
+			watchInfo.WorkerWg.Wait()
 			delete(r.watches, key)
 			log.Info("Stopped watch for resource", "key", key)
 		}
@@ -255,15 +264,24 @@ func (r *SinkFilterReconciler) createWatchForGVR(ctx context.Context, key string
 		APIVersion: apiVersion,
 	}
 
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+
 	watchInfo := &WatchInfo{
 		GVR:             gvr,
 		KindSelector:    kindSelector,
 		Namespaces:      namespaces,
 		StopCh:          stopCh,
 		ResourceVersion: "",
+		Queue:           queue,
 	}
 
 	r.watches[key] = watchInfo
+
+	numWorkers := 3
+	for i := 0; i < numWorkers; i++ {
+		watchInfo.WorkerWg.Add(1)
+		go r.runWorker(ctx, watchInfo, key)
+	}
 
 	go r.watchLoop(ctx, watchInfo, key)
 }
@@ -354,9 +372,46 @@ func (r *SinkFilterReconciler) processWatchEvents(ctx context.Context, watchInte
 				}
 			}
 
-			if err := r.handleWatchEvent(ctx, event, watchInfo); err != nil {
-				log.Error(err, "Failed to handle watch event", "key", key)
+			watchInfo.Queue.Add(&watchEventItem{
+				event: event,
+				ctx:   ctx,
+			})
+		}
+	}
+}
+
+func (r *SinkFilterReconciler) runWorker(ctx context.Context, watchInfo *WatchInfo, key string) {
+	defer watchInfo.WorkerWg.Done()
+	log := log.FromContext(ctx)
+
+	for {
+		select {
+		case <-watchInfo.StopCh:
+			log.Info("Stopping worker", "key", key)
+			return
+		default:
+			item, shutdown := watchInfo.Queue.Get()
+			if shutdown {
+				return
 			}
+
+			func() {
+				defer watchInfo.Queue.Done(item)
+
+				eventItem, ok := item.(*watchEventItem)
+				if !ok {
+					log.Error(nil, "Unexpected item type in queue", "type", fmt.Sprintf("%T", item))
+					return
+				}
+
+				if err := r.handleWatchEvent(eventItem.ctx, eventItem.event, watchInfo); err != nil {
+					log.Error(err, "Failed to handle watch event", "key", key)
+					watchInfo.Queue.AddRateLimited(item)
+					return
+				}
+
+				watchInfo.Queue.Forget(item)
+			}()
 		}
 	}
 }
