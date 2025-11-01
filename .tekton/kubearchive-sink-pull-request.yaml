@@ -403,5 +403,4 @@ spec:
       optional: true
     - name: netrc
       optional: true
-        secretName: '{{ git_auth_secret }}'
 status: {}
