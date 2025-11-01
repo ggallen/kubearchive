@@ -503,7 +503,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kubearchive-f3f6c
+    serviceAccountName: build-pipeline-kubearchive-sink
   workspaces:
   - name: git-auth
     secret:
