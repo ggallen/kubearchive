@@ -398,9 +398,9 @@ spec:
         operator: notin
         values:
         - ""
-    workspaces:
-    - name: git-auth
-      optional: true
-    - name: netrc
-      optional: true
+  workspaces:
+  - name: git-auth
+    optional: true
+  - name: netrc
+    optional: true
 status: {}
