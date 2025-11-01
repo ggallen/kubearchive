@@ -40,10 +40,9 @@ spec:
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images while maintaining trust after pipeline customization.
-  
+
       _Uses `ko` to create a container image leveraging [trusted artifacts](https://konflux-ci.dev/architecture/ADR/0036-trusted-artifacts.html). It also optionally creates a source image and runs some build-time tests. Information is shared between tasks using OCI artifacts instead of PVCs. EC will pass the [`trusted_task.trusted`](https://conforma.dev/docs/policy/packages/release_trusted_task.html#trusted_task__trusted) policy as long as all data used to build the artifact is generated from trusted tasks.
       This pipeline is pushed as a Tekton bundle to [quay.io](https://quay.io/repository/konflux-ci/tekton-catalog/pipeline-ko-build-oci-ta?tab=tags)_
-    finally: []
     params:
     - description: Source Repository URL
       name: git-url
@@ -68,8 +67,8 @@ spec:
       name: prefetch-input
       type: string
     - default: ""
-      description: Image tag expiration time, time values could be something like 1h,
-        2d, 3w for hours, days, and weeks, respectively.
+      description: Image tag expiration time, time values could be something like
+        1h, 2d, 3w for hours, days, and weeks, respectively.
       name: image-expires-after
       type: string
     - default: "false"
@@ -97,13 +96,17 @@ spec:
       name: pr-tag
       type: string
     results:
-    - name: IMAGE_URL
+    - description: ""
+      name: IMAGE_URL
       value: $(tasks.build-image-index.results.IMAGE_URL)
-    - name: IMAGE_DIGEST
+    - description: ""
+      name: IMAGE_DIGEST
       value: $(tasks.build-image-index.results.IMAGE_DIGEST)
-    - name: CHAINS-GIT_URL
+    - description: ""
+      name: CHAINS-GIT_URL
       value: $(tasks.clone-repository.results.url)
-    - name: CHAINS-GIT_COMMIT
+    - description: ""
+      name: CHAINS-GIT_COMMIT
       value: $(tasks.clone-repository.results.commit)
     tasks:
     - name: init
@@ -115,8 +118,14 @@ spec:
       - name: skip-checks
         value: $(params.skip-checks)
       taskRef:
-        name: init
-        version: "0.2"
+        params:
+        - name: name
+          value: init
+        - name: bundle
+          value: quay.io/gallen/build-definitions:init-0.2@sha256:91152dec1e8d3adb50ccb55f7736d57d30e1e86ffc16cfdedf0dc913acaf304d
+        - name: kind
+          value: task
+        resolver: bundles
     - name: clone-repository
       params:
       - name: url
@@ -130,8 +139,14 @@ spec:
       runAfter:
       - init
       taskRef:
-        name: git-clone-oci-ta
-        version: "0.1"
+        params:
+        - name: name
+          value: git-clone-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:git-clone-oci-ta-0.1@sha256:268e0aede747bd99c0efac46eb159f035850555382baf6e31fdfff7b5f910c9d
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(tasks.init.results.build)
         operator: in
@@ -153,8 +168,14 @@ spec:
       runAfter:
       - clone-repository
       taskRef:
-        name: prefetch-dependencies-oci-ta
-        version: "0.2"
+        params:
+        - name: name
+          value: prefetch-dependencies-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:prefetch-dependencies-oci-ta-0.2@sha256:9dc529a25a7f68861f9aa6ccd47ef516f23667cb69fc6824978fef29add98cfa
+        - name: kind
+          value: task
+        resolver: bundles
       workspaces:
       - name: git-basic-auth
         workspace: git-auth
@@ -179,8 +200,14 @@ spec:
       runAfter:
       - generate-code
       taskRef:
-        name: ko-oci-ta
-        version: "0.1"
+        params:
+        - name: name
+          value: ko-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:ko-oci-ta-0.1@sha256:8f7f3c4daee6eb287657511733e78008748aeb90931bcb3c056d22504bfbdac0
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(tasks.init.results.build)
         operator: in
@@ -204,8 +231,14 @@ spec:
       runAfter:
       - build-container
       taskRef:
-        name: build-image-index
-        version: "0.1"
+        params:
+        - name: name
+          value: build-image-index
+        - name: bundle
+          value: quay.io/gallen/build-definitions:build-image-index-0.1@sha256:efc01da181ed1aef552dad7f111f760bd5b07cd02d7f274310ce056398f60853
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(tasks.init.results.build)
         operator: in
@@ -222,8 +255,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: source-build-oci-ta
-        version: "0.3"
+        params:
+        - name: name
+          value: source-build-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:source-build-oci-ta-0.3@sha256:33596d123509165899f5eb89c95fbb6964cc114e526cbb6add299aead702360b
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(tasks.init.results.build)
         operator: in
@@ -242,8 +281,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: deprecated-image-check
-        version: "0.5"
+        params:
+        - name: name
+          value: deprecated-image-check
+        - name: bundle
+          value: quay.io/konflux-ci/tekton-catalog/task-deprecated-image-check:0.5@sha256:f59175d9a0a60411738228dfe568af4684af4aa5e7e05c832927cb917801d489
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.skip-checks)
         operator: in
@@ -258,8 +303,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: clair-scan
-        version: "0.3"
+        params:
+        - name: name
+          value: clair-scan
+        - name: bundle
+          value: quay.io/gallen/build-definitions:clair-scan-0.3@sha256:8ca999b6b01d2af4f5bc1bcc3b69f1a2e5ea33d42dccbace6839dbf41fd7f5c1
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.skip-checks)
         operator: in
@@ -272,8 +323,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: ecosystem-cert-preflight-checks
-        version: "0.2"
+        params:
+        - name: name
+          value: ecosystem-cert-preflight-checks
+        - name: bundle
+          value: quay.io/gallen/build-definitions:ecosystem-cert-preflight-checks-0.2@sha256:4a7f04274ae7fe0f513ccdd5a843e3e2a4daf4ca21380265d3c4efca279f47e6
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.skip-checks)
         operator: in
@@ -290,8 +347,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: sast-snyk-check-oci-ta
-        version: "0.4"
+        params:
+        - name: name
+          value: sast-snyk-check-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:sast-snyk-check-oci-ta-0.4@sha256:f687fd7a1b3e675e37d3252f08adf5e2348429fff2d74293725ec8b84223cbd3
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.skip-checks)
         operator: in
@@ -306,8 +369,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: clamav-scan
-        version: "0.3"
+        params:
+        - name: name
+          value: clamav-scan
+        - name: bundle
+          value: quay.io/gallen/build-definitions:clamav-scan-0.3@sha256:064e43aaf1072ceda345998ba70c149f59f69e1f858fc30d274486c0415d42f4
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.skip-checks)
         operator: in
@@ -324,8 +393,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: sast-shell-check-oci-ta
-        version: "0.1"
+        params:
+        - name: name
+          value: sast-shell-check-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:sast-shell-check-oci-ta-0.1@sha256:0bdf289dc9663175d3b9a6f7e439d7f57667ea86f7284d0682309810b6d9d681
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.skip-checks)
         operator: in
@@ -342,8 +417,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: sast-unicode-check-oci-ta
-        version: "0.3"
+        params:
+        - name: name
+          value: sast-unicode-check-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:sast-unicode-check-oci-ta-0.3@sha256:64347ca1e2ad6c458a5d401d85cc291d72edd3581b51deee13fa03d9c493bc9b
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.skip-checks)
         operator: in
@@ -358,8 +439,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: apply-tags
-        version: "0.2"
+        params:
+        - name: name
+          value: apply-tags
+        - name: bundle
+          value: quay.io/gallen/build-definitions:apply-tags-0.2@sha256:ce53db25ce19e41cabd627c70013068c31ccabac1accea740ed14348226b988e
+        - name: kind
+          value: task
+        resolver: bundles
     - name: rpms-signature-scan
       params:
       - name: image-url
@@ -369,8 +456,14 @@ spec:
       runAfter:
       - build-image-index
       taskRef:
-        name: rpms-signature-scan
-        version: "0.2"
+        params:
+        - name: name
+          value: rpms-signature-scan
+        - name: bundle
+          value: quay.io/konflux-ci/konflux-vanguard/task-rpms-signature-scan:0.2@sha256:06977232e67509e5540528ff6c3b081b23fc5bf3e40fb3e2d09a086d5c3243fc
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.skip-checks)
         operator: in
@@ -391,16 +484,28 @@ spec:
       runAfter:
       - prefetch-dependencies
       taskRef:
-        name: run-script-oci-ta
-        version: "0.1"
+        params:
+        - name: name
+          value: run-script-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:run-script-oci-ta-0.1@sha256:f29409c79e647c71b7ba3fd96c5f4e10e53e94b538589af1545bd3860b033125
+        - name: kind
+          value: task
+        resolver: bundles
       when:
       - input: $(params.preprocessing-script)
         operator: notin
         values:
         - ""
+    workspaces:
+    - name: git-auth
+      optional: true
+    - name: netrc
+      optional: true
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-kubearchive-f3f6c
   workspaces:
   - name: git-auth
-    optional: true
-  - name: netrc
-    optional: true
+    secret:
+      secretName: '{{ git_auth_secret }}'
 status: {}
