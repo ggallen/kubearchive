@@ -264,7 +264,12 @@ func (r *SinkFilterReconciler) createWatchForGVR(ctx context.Context, key string
 		APIVersion: apiVersion,
 	}
 
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewRateLimitingQueueWithConfig(
+		workqueue.DefaultControllerRateLimiter(),
+		workqueue.RateLimitingQueueConfig{
+			Name: key,
+		},
+	)
 
 	watchInfo := &WatchInfo{
 		GVR:             gvr,
@@ -487,6 +492,13 @@ func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, event watch.E
 	namespace := unstructuredObj.GetNamespace()
 	name := unstructuredObj.GetName()
 
+	// Extract owner UUID from ownerReferences if present
+	var owner string
+	ownerRefs := unstructuredObj.GetOwnerReferences()
+	if len(ownerRefs) > 0 {
+		owner = string(ownerRefs[0].UID)
+	}
+
 	var eventType string
 	switch event.Type {
 	case watch.Added:
@@ -497,7 +509,7 @@ func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, event watch.E
 		eventType = "delete"
 	default:
 		err := fmt.Errorf("unknown watch event type: %s", event.Type)
-		log.Error(err, "Ignoring event", "uid", uid, "namespace", namespace, "name", name)
+		log.Error(err, "Ignoring event", "uid", uid, "namespace", namespace, "name", name, "owner", owner)
 		return err
 	}
 
@@ -527,6 +539,7 @@ func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, event watch.E
 			"uid", uid,
 			"namespace", namespace,
 			"name", name,
+			"owner", owner,
 			"eventType", eventType,
 			"gvr", watchInfo.GVR.String(),
 			"kind", watchInfo.KindSelector.Kind)
@@ -537,6 +550,7 @@ func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, event watch.E
 		"uid", uid,
 		"namespace", namespace,
 		"name", name,
+		"owner", owner,
 		"eventType", fullEventType,
 		"gvr", watchInfo.GVR.String(),
 		"kind", watchInfo.KindSelector.Kind)
