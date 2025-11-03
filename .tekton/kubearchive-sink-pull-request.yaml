@@ -31,6 +31,8 @@ spec:
       controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
   - name: ko-docker-repo
     value: quay.io/redhat-user-workloads/kubearchive-tenant/kubearchive-sink
+  - name: image-naming-strategy
+    value: "--base"
   - name: import-path
     value: ./cmd/sink
   - name: pr-tag
@@ -82,6 +84,10 @@ spec:
     - default: ""
       description: Setting for KO_DOCKER_REPO
       name: ko-docker-repo
+      type: string
+    - default: "--preserve-import-paths"
+      description: Image naming strategy.
+      name: image-naming-strategy
       type: string
     - default: ""
       description: Import path to build
@@ -191,6 +197,8 @@ spec:
         value: $(params.default-base-image)
       - name: KO_DOCKER_REPO
         value: $(params.ko-docker-repo)
+      - name: IMAGE_NAMING_STRATEGY
+        value: $(params.image-naming-strategy
       - name: IMPORT_PATH
         value: $(params.import-path)
       - name: SOURCE_ARTIFACT
