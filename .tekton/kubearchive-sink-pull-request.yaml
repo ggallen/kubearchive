@@ -122,7 +122,7 @@ spec:
         - name: name
           value: init
         - name: bundle
-          value: quay.io/gallen/build-definitions:init-0.2@sha256:91152dec1e8d3adb50ccb55f7736d57d30e1e86ffc16cfdedf0dc913acaf304d
+          value: quay.io/gallen/build-definitions:init-0.2@sha256:830092f7eacf5710553dd57332cbe6e91c9fa29b4b677fd1a7115f71605ca14a
         - name: kind
           value: task
         resolver: bundles
@@ -143,7 +143,7 @@ spec:
         - name: name
           value: git-clone-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:git-clone-oci-ta-0.1@sha256:268e0aede747bd99c0efac46eb159f035850555382baf6e31fdfff7b5f910c9d
+          value: quay.io/gallen/build-definitions:git-clone-oci-ta-0.1@sha256:fecdcff2513e5d52b9b56e227f631f997ffb5191f4f6785506b1cadd67691f49
         - name: kind
           value: task
         resolver: bundles
@@ -172,7 +172,7 @@ spec:
         - name: name
           value: prefetch-dependencies-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:prefetch-dependencies-oci-ta-0.2@sha256:9dc529a25a7f68861f9aa6ccd47ef516f23667cb69fc6824978fef29add98cfa
+          value: quay.io/gallen/build-definitions:prefetch-dependencies-oci-ta-0.2@sha256:2dae15073839155d4c6f8ac5167c02d4bbf168058bd25254cd359e3c1dcfdde0
         - name: kind
           value: task
         resolver: bundles
@@ -204,7 +204,7 @@ spec:
         - name: name
           value: ko-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:ko-oci-ta-0.1@sha256:8f7f3c4daee6eb287657511733e78008748aeb90931bcb3c056d22504bfbdac0
+          value: quay.io/gallen/build-definitions:ko-oci-ta-0.1@sha256:bdbbd460574b6c0789b480014acacf8772e52a45b9dc01ef2739cf5e82b30e66
         - name: kind
           value: task
         resolver: bundles
@@ -259,7 +259,7 @@ spec:
         - name: name
           value: source-build-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:source-build-oci-ta-0.3@sha256:33596d123509165899f5eb89c95fbb6964cc114e526cbb6add299aead702360b
+          value: quay.io/gallen/build-definitions:source-build-oci-ta-0.3@sha256:a606acd79dfd867c837bd2080c10ae123a7a502bbc2b01d1eb91891c0ec3dae9
         - name: kind
           value: task
         resolver: bundles
@@ -307,7 +307,7 @@ spec:
         - name: name
           value: clair-scan
         - name: bundle
-          value: quay.io/gallen/build-definitions:clair-scan-0.3@sha256:8ca999b6b01d2af4f5bc1bcc3b69f1a2e5ea33d42dccbace6839dbf41fd7f5c1
+          value: quay.io/gallen/build-definitions:clair-scan-0.3@sha256:71e2d8b0a3abf38dfe583b634ffcef029e4c988c9d509f77e4f9244079d088d6
         - name: kind
           value: task
         resolver: bundles
@@ -351,7 +351,7 @@ spec:
         - name: name
           value: sast-snyk-check-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:sast-snyk-check-oci-ta-0.4@sha256:f687fd7a1b3e675e37d3252f08adf5e2348429fff2d74293725ec8b84223cbd3
+          value: quay.io/gallen/build-definitions:sast-snyk-check-oci-ta-0.4@sha256:892bfab17ebb3094089ea563a8b3c365a347da9d8d4aa5287e8c90d5c37f79dd
         - name: kind
           value: task
         resolver: bundles
@@ -373,7 +373,7 @@ spec:
         - name: name
           value: clamav-scan
         - name: bundle
-          value: quay.io/gallen/build-definitions:clamav-scan-0.3@sha256:064e43aaf1072ceda345998ba70c149f59f69e1f858fc30d274486c0415d42f4
+          value: quay.io/gallen/build-definitions:clamav-scan-0.3@sha256:6a6b4f08dd00083133297dd0fc87dec904245fe952c84bcf2801ec9cf5b37208
         - name: kind
           value: task
         resolver: bundles
@@ -397,7 +397,7 @@ spec:
         - name: name
           value: sast-shell-check-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:sast-shell-check-oci-ta-0.1@sha256:0bdf289dc9663175d3b9a6f7e439d7f57667ea86f7284d0682309810b6d9d681
+          value: quay.io/gallen/build-definitions:sast-shell-check-oci-ta-0.1@sha256:6a43cfa43d703862b3bb108c19bf0fa2ef08293c9632472518f71960d4ed6fbf
         - name: kind
           value: task
         resolver: bundles
@@ -421,7 +421,7 @@ spec:
         - name: name
           value: sast-unicode-check-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:sast-unicode-check-oci-ta-0.3@sha256:64347ca1e2ad6c458a5d401d85cc291d72edd3581b51deee13fa03d9c493bc9b
+          value: quay.io/gallen/build-definitions:sast-unicode-check-oci-ta-0.3@sha256:ffe55b91ca9694ea83c296a6d0697e62543e0feeaca0f4ad70f553139535e62d
         - name: kind
           value: task
         resolver: bundles
@@ -460,7 +460,7 @@ spec:
         - name: name
           value: rpms-signature-scan
         - name: bundle
-          value: quay.io/konflux-ci/konflux-vanguard/task-rpms-signature-scan:0.2@sha256:06977232e67509e5540528ff6c3b081b23fc5bf3e40fb3e2d09a086d5c3243fc
+          value: quay.io/konflux-ci/konflux-vanguard/task-rpms-signature-scan:0.2@sha256:3d016c63bcab64ab82da762a52b013c0bcb534e9523b8c0e073cc3a0c02f0cac
         - name: kind
           value: task
         resolver: bundles
