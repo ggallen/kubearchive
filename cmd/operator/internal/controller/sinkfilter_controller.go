@@ -47,11 +47,6 @@ type WatchInfo struct {
 	WorkerWg        sync.WaitGroup
 }
 
-type watchEventItem struct {
-	event watch.Event
-	ctx   context.Context
-}
-
 type SinkFilterReconciler struct {
 	Client              client.Client
 	Scheme              *runtime.Scheme
@@ -377,10 +372,7 @@ func (r *SinkFilterReconciler) processWatchEvents(ctx context.Context, watchInte
 				}
 			}
 
-			watchInfo.Queue.Add(&watchEventItem{
-				event: event,
-				ctx:   ctx,
-			})
+			watchInfo.Queue.Add(event)
 		}
 	}
 }
@@ -403,13 +395,13 @@ func (r *SinkFilterReconciler) runWorker(ctx context.Context, watchInfo *WatchIn
 			func() {
 				defer watchInfo.Queue.Done(item)
 
-				eventItem, ok := item.(*watchEventItem)
+				event, ok := item.(watch.Event)
 				if !ok {
 					log.Error(nil, "Unexpected item type in queue", "type", fmt.Sprintf("%T", item))
 					return
 				}
 
-				if err := r.handleWatchEvent(eventItem.ctx, eventItem.event, watchInfo); err != nil {
+				if err := r.handleWatchEvent(ctx, event, watchInfo); err != nil {
 					log.Error(err, "Failed to handle watch event", "key", key)
 					watchInfo.Queue.AddRateLimited(item)
 					return
