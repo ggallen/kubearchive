@@ -9,14 +9,14 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "onboard-to-local-konflux-1"
+      == "onboard-konflux-ggallen"
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: new-kubearchive
-    appstudio.openshift.io/component: kubearchive-daf0a
+    appstudio.openshift.io/application: kubearchive
+    appstudio.openshift.io/component: kubearchive-sink
     pipelines.appstudio.openshift.io/type: build
-  name: kubearchive-daf0a-on-pull-request
-  namespace: user-ns2
+  name: kubearchive-sink-on-pull-request
+  namespace: kubearchive-tenant
 spec:
   params:
   - name: git-url
@@ -24,11 +24,21 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/kubearchive/user-ns2/kubearchive-daf0a:on-pr-{{revision}}
+    value: quay.io/redhat-user-workloads/kubearchive-tenant/kubearchive-sink:on-pr-{{revision}}
+  - name: preprocessing-script
+    value: |
+      controller-gen crd paths="./cmd/operator/..." output:dir=config/crds
+      controller-gen object:headerFile="cmd/operator/hack/copyright.txt" paths="./cmd/operator/..." output:dir=cmd/operator/api/v1
+  - name: ko-docker-repo
+    value: quay.io/redhat-user-workloads/kubearchive-tenant/kubearchive-sink
+  - name: image-naming-strategy
+    value: "--bare"
+  - name: import-path
+    value: ./cmd/sink
+  - name: pr-tag
+    value: on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
-  - name: dockerfile
-    value: Dockerfile
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images while maintaining trust after pipeline customization.
@@ -74,6 +84,10 @@ spec:
     - default: ""
       description: Setting for KO_DOCKER_REPO
       name: ko-docker-repo
+      type: string
+    - default: "--preserve-import-paths"
+      description: Image naming strategy.
+      name: image-naming-strategy
       type: string
     - default: ""
       description: Import path to build
@@ -135,7 +149,7 @@ spec:
         - name: name
           value: git-clone-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:git-clone-oci-ta-0.1@sha256:fe8a7bdfa98ae4993c5506cc6da5877394d7939f2bda12d3df1de439e1bd6a43
+          value: quay.io/gallen/build-definitions:git-clone-oci-ta-0.1@sha256:fecdcff2513e5d52b9b56e227f631f997ffb5191f4f6785506b1cadd67691f49
         - name: kind
           value: task
         resolver: bundles
@@ -183,20 +197,22 @@ spec:
         value: $(params.default-base-image)
       - name: KO_DOCKER_REPO
         value: $(params.ko-docker-repo)
+      - name: IMAGE_NAMING_STRATEGY
+        value: $(params.image-naming-strategy
       - name: IMPORT_PATH
         value: $(params.import-path)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+        value: $(tasks.generate-code.results.SCRIPT_ARTIFACT)
       - name: TAG
         value: $(params.pr-tag)
       runAfter:
-      - prefetch-dependencies
+      - generate-code
       taskRef:
         params:
         - name: name
           value: ko-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:ko-oci-ta-0.1@sha256:46dab42e0676c6dfe5f687c8df77a04cb0ff471dd87534754320d6f4111e5c30
+          value: quay.io/gallen/build-definitions:ko-oci-ta-0.1@sha256:bdbbd460574b6c0789b480014acacf8772e52a45b9dc01ef2739cf5e82b30e66
         - name: kind
           value: task
         resolver: bundles
@@ -227,7 +243,7 @@ spec:
         - name: name
           value: build-image-index
         - name: bundle
-          value: quay.io/gallen/build-definitions:build-image-index-0.1@sha256:9d3ce3563fda246206a7aa1eb0472d179a507235a2edf1c9bf8cf105adba8305
+          value: quay.io/gallen/build-definitions:build-image-index-0.1@sha256:efc01da181ed1aef552dad7f111f760bd5b07cd02d7f274310ce056398f60853
         - name: kind
           value: task
         resolver: bundles
@@ -243,7 +259,7 @@ spec:
       - name: BINARY_IMAGE_DIGEST
         value: $(tasks.build-image-index.results.IMAGE_DIGEST)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+        value: $(tasks.generate-code.results.SCRIPT_ARTIFACT)
       runAfter:
       - build-image-index
       taskRef:
@@ -251,7 +267,7 @@ spec:
         - name: name
           value: source-build-oci-ta
         - name: bundle
-          value: quay.io/gallen/build-definitions:source-build-oci-ta-0.3@sha256:b36c3361306d2b8d9d58faf9ad260e121ce42111b00d433045659385c2fc0d98
+          value: quay.io/gallen/build-definitions:source-build-oci-ta-0.3@sha256:a606acd79dfd867c837bd2080c10ae123a7a502bbc2b01d1eb91891c0ec3dae9
         - name: kind
           value: task
         resolver: bundles
@@ -335,7 +351,7 @@ spec:
       - name: image-url
         value: $(tasks.build-image-index.results.IMAGE_URL)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+        value: $(tasks.generate-code.results.SCRIPT_ARTIFACT)
       runAfter:
       - build-image-index
       taskRef:
@@ -381,7 +397,7 @@ spec:
       - name: image-url
         value: $(tasks.build-image-index.results.IMAGE_URL)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+        value: $(tasks.generate-code.results.SCRIPT_ARTIFACT)
       runAfter:
       - build-image-index
       taskRef:
@@ -405,7 +421,7 @@ spec:
       - name: image-url
         value: $(tasks.build-image-index.results.IMAGE_URL)
       - name: SOURCE_ARTIFACT
-        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+        value: $(tasks.generate-code.results.SCRIPT_ARTIFACT)
       runAfter:
       - build-image-index
       taskRef:
@@ -461,6 +477,34 @@ spec:
         operator: in
         values:
         - "false"
+    - name: generate-code
+      params:
+      - name: ociStorage
+        value: $(params.output-image).script
+      - name: ociArtifactExpiresAfter
+        value: $(params.image-expires-after)
+      - name: SCRIPT_RUNNER_IMAGE
+        value: quay.io/konflux-ci/operator-sdk-builder:latest
+      - name: SCRIPT
+        value: $(params.preprocessing-script)
+      - name: SOURCE_ARTIFACT
+        value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
+      runAfter:
+      - prefetch-dependencies
+      taskRef:
+        params:
+        - name: name
+          value: run-script-oci-ta
+        - name: bundle
+          value: quay.io/gallen/build-definitions:run-script-oci-ta-0.1@sha256:f29409c79e647c71b7ba3fd96c5f4e10e53e94b538589af1545bd3860b033125
+        - name: kind
+          value: task
+        resolver: bundles
+      when:
+      - input: $(params.preprocessing-script)
+        operator: notin
+        values:
+        - ""
     workspaces:
     - name: git-auth
       optional: true
