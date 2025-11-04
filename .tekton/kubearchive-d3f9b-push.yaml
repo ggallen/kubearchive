@@ -464,7 +464,7 @@ spec:
     - name: netrc
       optional: true
   taskRunTemplate:
-    serviceAccountName: build-pipeline-kubearchive-d3f9b
+    serviceAccountName: appstudio-pipeline
   workspaces:
   - name: git-auth
     secret:
