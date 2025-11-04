@@ -12,8 +12,8 @@ metadata:
       == "onboard-to-local-konflux-1"
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: kubearchive
-    appstudio.openshift.io/component: new-kubearchive
+    appstudio.openshift.io/application: new-kubearchive
+    appstudio.openshift.io/component: kubearchive-d3f9b
     pipelines.appstudio.openshift.io/type: build
   name: kubearchive-d3f9b-on-pull-request
   namespace: user-ns2
