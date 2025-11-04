@@ -16,7 +16,7 @@ metadata:
     appstudio.openshift.io/component: kubearchive-d3f9b
     pipelines.appstudio.openshift.io/type: build
   name: kubearchive-d3f9b-on-pull-request
-  namespace: kubearchive-tenant
+  namespace: user-ns2
 spec:
   params:
   - name: git-url
