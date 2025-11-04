@@ -5,10 +5,7 @@ package controller
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"math/big"
-	"net/http"
 	"slices"
 	"strings"
 	"sync"
@@ -23,8 +20,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -37,13 +36,19 @@ import (
 	"github.com/kubearchive/kubearchive/pkg/k8sclient"
 )
 
-type WatchInfo struct {
-	GVR             schema.GroupVersionResource
-	KindSelector    kubearchivev1.APIVersionKind
-	Namespaces      map[string]filters.CelExpressions
-	StopCh          chan struct{}
-	WatchInterface  watch.Interface
-	ResourceVersion string
+type InformerInfo struct {
+	GVR          schema.GroupVersionResource
+	KindSelector kubearchivev1.APIVersionKind
+	Namespaces   map[string]filters.CelExpressions
+	Informer     cache.SharedIndexInformer
+	StopCh       chan struct{}
+	Queue        workqueue.RateLimitingInterface
+	WorkerWg     sync.WaitGroup
+}
+
+type informerEventItem struct {
+	eventType string
+	obj       *unstructured.Unstructured
 }
 
 type SinkFilterReconciler struct {
@@ -52,11 +57,12 @@ type SinkFilterReconciler struct {
 	Mapper              meta.RESTMapper
 	dynamicClient       dynamic.Interface
 	cloudEventPublisher *cloudevents.SinkCloudEventPublisher
+	informerFactory     dynamicinformer.DynamicSharedInformerFactory
 
-	// Mutex to protect watch operations
+	// Mutex to protect informer operations
 	mu sync.RWMutex
-	// Map of GVK string to watch info
-	watches map[string]*WatchInfo
+	// Map of GVK string to informer info
+	informers map[string]*InformerInfo
 }
 
 //+kubebuilder:rbac:groups=kubearchive.org,resources=sinkfilters,verbs=get;list;watch;create;update;patch;delete
@@ -75,9 +81,9 @@ func (r *SinkFilterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("SinkFilter resource not found. Ignoring since object must be deleted")
-			// Clear all watches when the resource is deleted by calling generateWatches with empty maps.
-			if err = r.generateWatches(ctx, map[string]map[string]filters.CelExpressions{}); err != nil {
-				log.Error(err, "Failed to clear watches on delete")
+			// Clear all informers when the resource is deleted by calling generateInformers with empty maps.
+			if err = r.generateInformers(ctx, map[string]map[string]filters.CelExpressions{}); err != nil {
+				log.Error(err, "Failed to clear informers on delete")
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
@@ -86,7 +92,6 @@ func (r *SinkFilterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile RBAC resources
 	if err := r.reconcileClusterRole(ctx, sinkFilter); err != nil {
 		log.Error(err, "Failed to reconcile ClusterRole")
 		return ctrl.Result{}, err
@@ -99,8 +104,8 @@ func (r *SinkFilterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	namespacesByKinds := filters.ExtractAllNamespacesByKinds(sinkFilter)
 
-	if err := r.generateWatches(ctx, namespacesByKinds); err != nil {
-		log.Error(err, "Failed to generate watches")
+	if err := r.generateInformers(ctx, namespacesByKinds); err != nil {
+		log.Error(err, "Failed to generate informers")
 		return ctrl.Result{}, err
 	}
 
@@ -119,32 +124,31 @@ func (r *SinkFilterReconciler) parseKindAndAPIVersionFromKey(key string) (string
 	return "", ""
 }
 
-func (r *SinkFilterReconciler) generateWatches(ctx context.Context, namespacesByKinds map[string]map[string]filters.CelExpressions) error {
+func (r *SinkFilterReconciler) generateInformers(ctx context.Context, namespacesByKinds map[string]map[string]filters.CelExpressions) error {
 	log := log.FromContext(ctx)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	toStop := r.findWatchesToStop(namespacesByKinds)
-	toCreate := r.findWatchesToCreate(namespacesByKinds)
-	toUpdate := r.findWatchesToUpdate(namespacesByKinds, toStop)
+	toStop := r.findInformersToStop(namespacesByKinds)
+	toCreate := r.findInformersToCreate(namespacesByKinds)
+	toUpdate := r.findInformersToUpdate(namespacesByKinds, toStop)
 
 	for key := range toStop {
-		if watchInfo, exists := r.watches[key]; exists {
-			close(watchInfo.StopCh)
-			if watchInfo.WatchInterface != nil {
-				watchInfo.WatchInterface.Stop()
-			}
-			delete(r.watches, key)
-			log.Info("Stopped watch for resource", "key", key)
+		if informerInfo, exists := r.informers[key]; exists {
+			close(informerInfo.StopCh)
+			informerInfo.Queue.ShutDown()
+			informerInfo.WorkerWg.Wait()
+			delete(r.informers, key)
+			log.Info("Stopped informer for resource", "key", key)
 		}
 	}
 
 	for key := range toUpdate {
-		if watchInfo, exists := r.watches[key]; exists {
-			// Update the namespaces for this watch
-			watchInfo.Namespaces = namespacesByKinds[key]
-			log.Info("Updated watch namespaces", "key", key, "namespaceCount", len(watchInfo.Namespaces))
+		if informerInfo, exists := r.informers[key]; exists {
+			// Update the namespaces for this informer
+			informerInfo.Namespaces = namespacesByKinds[key]
+			log.Info("Updated informer namespaces", "key", key, "namespaceCount", len(informerInfo.Namespaces))
 		}
 	}
 
@@ -156,11 +160,11 @@ func (r *SinkFilterReconciler) generateWatches(ctx context.Context, namespacesBy
 			continue
 		}
 
-		r.createWatchForGVR(ctx, key, gvr, namespacesByKinds[key])
-		log.Info("Created watch for resource", "gvr", gvr.String())
+		r.createInformerForGVR(ctx, key, gvr, namespacesByKinds[key])
+		log.Info("Created informer for resource", "gvr", gvr.String())
 	}
 
-	log.Info("Watch update complete",
+	log.Info("Informer update complete",
 		"stopped", len(toStop),
 		"updated", len(toUpdate),
 		"created", len(toCreate))
@@ -168,9 +172,9 @@ func (r *SinkFilterReconciler) generateWatches(ctx context.Context, namespacesBy
 	return nil
 }
 
-func (r *SinkFilterReconciler) findWatchesToStop(namespacesByKinds map[string]map[string]filters.CelExpressions) map[string]struct{} {
+func (r *SinkFilterReconciler) findInformersToStop(namespacesByKinds map[string]map[string]filters.CelExpressions) map[string]struct{} {
 	toStop := make(map[string]struct{})
-	for existingKey := range r.watches {
+	for existingKey := range r.informers {
 		if _, stillNeeded := namespacesByKinds[existingKey]; !stillNeeded {
 			toStop[existingKey] = struct{}{}
 		}
@@ -178,20 +182,20 @@ func (r *SinkFilterReconciler) findWatchesToStop(namespacesByKinds map[string]ma
 	return toStop
 }
 
-func (r *SinkFilterReconciler) findWatchesToCreate(namespacesByKinds map[string]map[string]filters.CelExpressions) map[string]struct{} {
+func (r *SinkFilterReconciler) findInformersToCreate(namespacesByKinds map[string]map[string]filters.CelExpressions) map[string]struct{} {
 	toCreate := make(map[string]struct{})
 	for newKey := range namespacesByKinds {
-		if _, exists := r.watches[newKey]; !exists {
+		if _, exists := r.informers[newKey]; !exists {
 			toCreate[newKey] = struct{}{}
 		}
 	}
 	return toCreate
 }
 
-func (r *SinkFilterReconciler) findWatchesToUpdate(namespacesByKinds map[string]map[string]filters.CelExpressions, toStop map[string]struct{}) map[string]struct{} {
+func (r *SinkFilterReconciler) findInformersToUpdate(namespacesByKinds map[string]map[string]filters.CelExpressions, toStop map[string]struct{}) map[string]struct{} {
 	toUpdate := make(map[string]struct{})
 
-	for existingKey := range r.watches {
+	for existingKey := range r.informers {
 		if _, stillNeeded := namespacesByKinds[existingKey]; stillNeeded {
 			if _, stopping := toStop[existingKey]; !stopping {
 				toUpdate[existingKey] = struct{}{}
@@ -230,7 +234,8 @@ func (r *SinkFilterReconciler) getGVRFromKindAndAPIVersion(kind, apiVersion stri
 	return mapping.Resource, kind, apiVersion, nil
 }
 
-func (r *SinkFilterReconciler) createWatchForGVR(ctx context.Context, key string, gvr schema.GroupVersionResource, namespaces map[string]filters.CelExpressions) {
+func (r *SinkFilterReconciler) createInformerForGVR(ctx context.Context, key string, gvr schema.GroupVersionResource, namespaces map[string]filters.CelExpressions) {
+	log := log.FromContext(ctx)
 	stopCh := make(chan struct{})
 
 	kind, apiVersion := r.parseKindAndAPIVersionFromKey(key)
@@ -239,214 +244,238 @@ func (r *SinkFilterReconciler) createWatchForGVR(ctx context.Context, key string
 		APIVersion: apiVersion,
 	}
 
-	watchInfo := &WatchInfo{
-		GVR:             gvr,
-		KindSelector:    kindSelector,
-		Namespaces:      namespaces,
-		StopCh:          stopCh,
-		ResourceVersion: "",
+	queue := workqueue.NewRateLimitingQueueWithConfig(
+		workqueue.DefaultControllerRateLimiter(),
+		workqueue.RateLimitingQueueConfig{
+			Name: key,
+		},
+	)
+
+	informer := r.informerFactory.ForResource(gvr).Informer()
+
+	informerInfo := &InformerInfo{
+		GVR:          gvr,
+		KindSelector: kindSelector,
+		Namespaces:   namespaces,
+		Informer:     informer,
+		StopCh:       stopCh,
+		Queue:        queue,
 	}
 
-	r.watches[key] = watchInfo
+	r.informers[key] = informerInfo
 
-	go r.watchLoop(ctx, watchInfo, key)
+	_, err := informer.AddEventHandler(cache.FilteringResourceEventHandler{
+		FilterFunc: r.filterFunc,
+		Handler: cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				r.handleInformerEventWrapper(ctx, informerInfo, "Added", obj)
+			},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				r.handleInformerEventWrapper(ctx, informerInfo, "Modified", newObj)
+			},
+			DeleteFunc: func(obj interface{}) {
+				r.handleInformerEventWrapper(ctx, informerInfo, "Deleted", obj)
+			},
+		},
+	})
+	if err != nil {
+		log.Error(err, "Failed to add event handler to informer", "key", key)
+		return
+	}
+
+	numWorkers := 3
+	for i := 0; i < numWorkers; i++ {
+		informerInfo.WorkerWg.Add(1)
+		go r.runWorker(ctx, informerInfo, key)
+	}
+
+	go informer.Run(stopCh)
+
+	if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
+		log.Error(nil, "Failed to sync cache for informer", "key", key)
+		return
+	}
+
+	log.Info("Started informer for resource", "key", key, "gvr", gvr.String())
 }
 
-func (r *SinkFilterReconciler) watchLoop(ctx context.Context, watchInfo *WatchInfo, key string) {
+func (r *SinkFilterReconciler) handleInformerEventWrapper(ctx context.Context, informerInfo *InformerInfo, eventType string, obj interface{}) {
 	log := log.FromContext(ctx)
-	backoff := time.Second
-	maxBackoff := 5 * time.Minute
+	if !informerInfo.Informer.HasSynced() {
+		return
+	}
+	unstructuredObj, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		log.Error(nil, "Unexpected object type in handler", "type", fmt.Sprintf("%T", obj), "eventType", eventType)
+		return
+	}
+	informerInfo.Queue.Add(&informerEventItem{
+		eventType: eventType,
+		obj:       unstructuredObj,
+	})
+}
+
+func (r *SinkFilterReconciler) filterFunc(obj interface{}) bool {
+	unstructuredObj, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return false
+	}
+
+	kind := unstructuredObj.GetKind()
+	apiVersion := unstructuredObj.GetAPIVersion()
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	informerInfo, exists := r.informers[kind+"-"+apiVersion]
+	if !exists {
+		return false
+	}
+
+	namespace := unstructuredObj.GetNamespace()
+	_, globalExists := informerInfo.Namespaces[constants.SinkFilterGlobalNamespace]
+	_, namespaceExists := informerInfo.Namespaces[namespace]
+
+	if !globalExists && !namespaceExists {
+		return false
+	}
+
+	return true
+}
+
+func (r *SinkFilterReconciler) runWorker(ctx context.Context, informerInfo *InformerInfo, key string) {
+	defer informerInfo.WorkerWg.Done()
+	log := log.FromContext(ctx)
 
 	for {
 		select {
-		case <-watchInfo.StopCh:
-			log.Info("Watch stopped", "key", key)
+		case <-informerInfo.StopCh:
+			log.Info("Stopping worker", "key", key)
 			return
 		default:
-		}
-
-		var err error
-		watchInfo.WatchInterface, err = r.createWatch(ctx, watchInfo.GVR, watchInfo.ResourceVersion)
-		if err != nil {
-			log.Error(err, "Failed to create watch, retrying", "key", key, "backoff", backoff)
-			select {
-			case <-time.After(backoff):
-				backoff = time.Duration(float64(backoff) * 1.5)
-				if backoff > maxBackoff {
-					backoff = maxBackoff
-				}
-				continue
-			case <-watchInfo.StopCh:
-				return
-			}
-		}
-
-		backoff = time.Second // Reset backoff on successful connection
-
-		log.Info("Started watch", "key", key, "gvr", watchInfo.GVR.String(), "resourceVersion", watchInfo.ResourceVersion)
-
-		r.processWatchEvents(ctx, watchInfo.WatchInterface, watchInfo, key)
-
-		watchInfo.WatchInterface.Stop()
-		watchInfo.WatchInterface = nil
-
-		log.Info("Watch disconnected, will retry", "key", key)
-	}
-}
-
-func (r *SinkFilterReconciler) createWatch(ctx context.Context, gvr schema.GroupVersionResource, resourceVersion string) (watch.Interface, error) {
-	listOptions := metav1.ListOptions{
-		TimeoutSeconds:  randomTimeout(), // Timeout between 5-10 minutes
-		ResourceVersion: resourceVersion,
-	}
-
-	watchInterface, err := r.dynamicClient.Resource(gvr).Watch(ctx, listOptions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create watch for %v: %w", gvr, err)
-	}
-	return watchInterface, nil
-}
-
-func (r *SinkFilterReconciler) processWatchEvents(ctx context.Context, watchInterface watch.Interface, watchInfo *WatchInfo, key string) {
-	log := log.FromContext(ctx)
-	resultChan := watchInterface.ResultChan()
-
-	for {
-		select {
-		case <-watchInfo.StopCh:
-			log.Info("Stopping watch event processing", "key", key)
-			return
-		case event, ok := <-resultChan:
-			if !ok {
-				log.Info("Watch channel closed", "key", key)
+			item, shutdown := informerInfo.Queue.Get()
+			if shutdown {
 				return
 			}
 
-			// If watch event type is ERROR, exit the loop to recreate the watch.
-			if event.Type == watch.Error {
-				r.logWatchError(ctx, event, watchInfo, key)
-				if r.shouldClearResourceVersion(event) {
-					log.Info("Watch received Gone error, clearing resource version for full resync", "key", key)
-					watchInfo.ResourceVersion = ""
-				}
-				return
-			}
+			func() {
+				defer informerInfo.Queue.Done(item)
 
-			if unstructuredObj, ok := event.Object.(*unstructured.Unstructured); ok {
-				if resourceVersion := unstructuredObj.GetResourceVersion(); resourceVersion != "" {
-					watchInfo.ResourceVersion = resourceVersion
+				eventItem, ok := item.(*informerEventItem)
+				if !ok {
+					log.Error(nil, "Unexpected item type in queue", "type", fmt.Sprintf("%T", item))
+					return
 				}
-			}
 
-			if err := r.handleWatchEvent(ctx, event, watchInfo); err != nil {
-				log.Error(err, "Failed to handle watch event", "key", key)
-			}
+				if err := r.handleInformerEvent(ctx, eventItem.eventType, eventItem.obj, informerInfo); err != nil {
+					log.Error(err, "Failed to handle informer event", "key", key, "eventType", eventItem.eventType)
+					informerInfo.Queue.AddRateLimited(item)
+					return
+				}
+
+				informerInfo.Queue.Forget(item)
+			}()
 		}
 	}
 }
 
-func (r *SinkFilterReconciler) logWatchError(ctx context.Context, event watch.Event, watchInfo *WatchInfo, key string) {
-	log := log.FromContext(ctx)
-
-	var errorMsg string
-	var errorCode int32
-	var errorReason metav1.StatusReason
-
-	if status, ok := event.Object.(*metav1.Status); ok {
-		errorMsg = status.Message
-		errorCode = status.Code
-		errorReason = status.Reason
-	} else {
-		errorMsg = fmt.Sprintf("unknown error format: %T", event.Object)
-	}
-
-	log.Info("Watch error event received",
-		"key", key,
-		"errorMessage", errorMsg,
-		"errorCode", errorCode,
-		"errorReason", errorReason,
-		"gvr", watchInfo.GVR.String())
-}
-
-func (r *SinkFilterReconciler) shouldClearResourceVersion(event watch.Event) bool {
-	var errorCode int32
-	var errorReason metav1.StatusReason
-
-	if status, ok := event.Object.(*metav1.Status); ok {
-		errorCode = status.Code
-		errorReason = status.Reason
-	}
-
-	return errorReason == metav1.StatusReasonGone || errorCode == http.StatusGone
-}
-
-func (r *SinkFilterReconciler) handleWatchEvent(ctx context.Context, event watch.Event, watchInfo *WatchInfo) error {
-	unstructuredObj, ok := event.Object.(*unstructured.Unstructured)
-	if !ok {
-		return fmt.Errorf("unexpected object type: %T", event.Object)
-	}
-
+func (r *SinkFilterReconciler) handleInformerEvent(ctx context.Context, eventType string, unstructuredObj *unstructured.Unstructured, informerInfo *InformerInfo) error {
 	objNamespace := unstructuredObj.GetNamespace()
-	globalCel, globalExists := watchInfo.Namespaces[constants.SinkFilterGlobalNamespace]
-	namespaceCel, namespaceExists := watchInfo.Namespaces[objNamespace]
+	globalCel, globalExists := informerInfo.Namespaces[constants.SinkFilterGlobalNamespace]
+	namespaceCel, namespaceExists := informerInfo.Namespaces[objNamespace]
 
 	if !globalExists && !namespaceExists {
 		return nil
 	}
 
-	switch event.Type {
-	case watch.Added, watch.Modified:
-		// First check deleteWhen CEL expressions
+	switch eventType {
+	case "Added", "Modified":
 		if (globalExists && kcel.ExecuteBooleanCEL(ctx, globalCel.DeleteWhen, unstructuredObj)) ||
 			(namespaceExists && kcel.ExecuteBooleanCEL(ctx, namespaceCel.DeleteWhen, unstructuredObj)) {
-			r.sendCloudEvent(ctx, "delete-when", unstructuredObj, watchInfo)
+			return r.sendCloudEvent(ctx, "delete-when", unstructuredObj, informerInfo)
 		} else if (globalExists && kcel.ExecuteBooleanCEL(ctx, globalCel.ArchiveWhen, unstructuredObj)) ||
 			(namespaceExists && kcel.ExecuteBooleanCEL(ctx, namespaceCel.ArchiveWhen, unstructuredObj)) {
-			r.sendCloudEvent(ctx, "archive-when", unstructuredObj, watchInfo)
+			return r.sendCloudEvent(ctx, "archive-when", unstructuredObj, informerInfo)
 		}
 		return nil
-	case watch.Deleted:
-		// For delete events, only send if ArchiveOnDelete CEL expressions return true
+	case "Deleted":
 		if (globalExists && kcel.ExecuteBooleanCEL(ctx, globalCel.ArchiveOnDelete, unstructuredObj)) ||
 			(namespaceExists && kcel.ExecuteBooleanCEL(ctx, namespaceCel.ArchiveOnDelete, unstructuredObj)) {
-			r.sendCloudEvent(ctx, "archive-on-delete", unstructuredObj, watchInfo)
+			return r.sendCloudEvent(ctx, "archive-on-delete", unstructuredObj, informerInfo)
 		}
 		return nil
 	default:
-		log.FromContext(ctx).Error(nil, "Ignoring unknown watch event type", "type", event.Type)
+		log.FromContext(ctx).Error(nil, "Ignoring unknown event type", "type", eventType)
 		return nil
 	}
 }
 
-func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, eventType string, unstructuredObj *unstructured.Unstructured, watchInfo *WatchInfo) {
+func (r *SinkFilterReconciler) sendCloudEvent(ctx context.Context, eventType string, unstructuredObj *unstructured.Unstructured, informerInfo *InformerInfo) error {
 	log := log.FromContext(ctx)
 
+	uid := string(unstructuredObj.GetUID())
+	name := unstructuredObj.GetName()
+	namespace := unstructuredObj.GetNamespace()
+
 	if r.cloudEventPublisher == nil {
-		log.Error(nil, "CloudEvent publisher not available, skipping event", "eventType", eventType, "gvr", watchInfo.GVR.String())
-		return
+		err := fmt.Errorf("CloudEvent publisher not available")
+		log.Error(err, "Skipping event",
+			"uid", uid,
+			"name", name,
+			"namespace", namespace,
+			"eventType", eventType,
+			"apiVersion", informerInfo.KindSelector.APIVersion,
+			"kind", informerInfo.KindSelector.Kind)
+		return err
 	}
 
 	resource := unstructuredObj.Object
 	if resource["apiVersion"] == nil {
-		if watchInfo.GVR.Group == "" {
-			resource["apiVersion"] = watchInfo.GVR.Version
+		if informerInfo.GVR.Group == "" {
+			resource["apiVersion"] = informerInfo.GVR.Version
 		} else {
-			resource["apiVersion"] = watchInfo.GVR.Group + "/" + watchInfo.GVR.Version
+			resource["apiVersion"] = informerInfo.GVR.Group + "/" + informerInfo.GVR.Version
 		}
 	}
 
-	if resource["kind"] == nil && watchInfo.KindSelector.Kind != "" {
-		resource["kind"] = watchInfo.KindSelector.Kind
+	if resource["kind"] == nil && informerInfo.KindSelector.Kind != "" {
+		resource["kind"] = informerInfo.KindSelector.Kind
+	}
+
+	var owner string
+	ownerRefs := unstructuredObj.GetOwnerReferences()
+	if len(ownerRefs) > 0 {
+		owner = string(ownerRefs[0].UID)
 	}
 
 	result := r.cloudEventPublisher.Send(ctx, "org.kubearchive.sinkfilters.resource."+eventType, resource)
 	if !ce.IsACK(result) {
-		message := "Cloud event send failed"
+		var err error
 		if ce.IsNACK(result) {
-			message = "Cloud event was not acknowledged"
+			err = fmt.Errorf("cloud event was not acknowledged")
+		} else {
+			err = fmt.Errorf("cloud event send failed")
 		}
-		log.Error(nil, message, "eventType", eventType, "gvr", watchInfo.GVR.String(), "kind", watchInfo.KindSelector.Kind, "result", result)
+		log.Error(err, "Failed to send cloud event",
+			"uid", uid,
+			"name", name,
+			"namespace", namespace,
+			"owner", owner,
+			"eventType", eventType,
+			"apiVersion", informerInfo.KindSelector.APIVersion,
+			"kind", informerInfo.KindSelector.Kind,
+			"result", result)
+		return err
 	}
+
+	log.Info("Successfully sent cloud event",
+		"uid", uid,
+		"name", name,
+		"namespace", namespace,
+		"owner", owner,
+		"eventType", eventType,
+		"apiVersion", informerInfo.KindSelector.APIVersion,
+		"kind", informerInfo.KindSelector.Kind)
+	return nil
 }
 
 func (r *SinkFilterReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -461,7 +490,9 @@ func (r *SinkFilterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return fmt.Errorf("failed to create cloud event publisher: %w", err)
 	}
 
-	r.watches = make(map[string]*WatchInfo)
+	r.informerFactory = dynamicinformer.NewFilteredDynamicSharedInformerFactory(r.dynamicClient, 10*time.Minute, metav1.NamespaceAll, nil)
+
+	r.informers = make(map[string]*InformerInfo)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubearchivev1.SinkFilter{}).
@@ -546,13 +577,3 @@ func (r *SinkFilterReconciler) reconcileClusterRoleBinding(ctx context.Context) 
 	return nil
 }
 
-func randomTimeout() *int64 {
-	// Generate a number of timeout seconds between 300 and 600.
-	n := big.NewInt(300)
-	n, err := rand.Int(rand.Reader, n)
-	if err == nil {
-		n.Add(n, big.NewInt(300))
-	}
-	result := n.Int64()
-	return &result
-}
