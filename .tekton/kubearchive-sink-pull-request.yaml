@@ -77,7 +77,7 @@ spec:
       description: Build a source image.
       name: build-source-image
       type: string
-    - default: "registry.access.redhat.com/ubi10/go-toolset@sha256:494dece7a8a8615682464291e0c570bcf9e779ce6f596c53d1a504759903cf61"
+    - default: "registry.access.redhat.com/ubi9/go-toolset@sha256:f14b6ec18b9a887b1cfa5f38ef22e8da5eb77f3ea72034c20834785d1fe640da"
       description: Default base image for ko
       name: default-base-image
       type: string
