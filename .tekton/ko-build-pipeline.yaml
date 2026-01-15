@@ -67,6 +67,10 @@ spec:
       description: PR tag to use on image
       name: pr-tag
       type: string
+    - default: quay.io/konflux-ci/operator-sdk-builder:latest
+      description: Script runner image
+      name: script-runner-image
+      type: string
   results:
     - description: ""
       name: IMAGE_URL
@@ -155,6 +159,8 @@ spec:
           workspace: netrc
     - name: build-container
       params:
+        - name: ADDITIONAL_BASE_IMAGES
+          value: [ $(params.script-runner-image) ]
         - name: COMMIT_SHA
           value: $(tasks.clone-repository.results.commit)
         - name: IMAGE_EXPIRES_AFTER
@@ -430,7 +436,7 @@ spec:
         - name: ociArtifactExpiresAfter
           value: $(params.image-expires-after)
         - name: SCRIPT_RUNNER_IMAGE
-          value: quay.io/konflux-ci/operator-sdk-builder:latest
+          value: $(params.script-runner-image)
         - name: SCRIPT
           value: $(params.preprocessing-script)
         - name: SOURCE_ARTIFACT
